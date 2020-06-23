@@ -3,7 +3,7 @@ const has = require('lodash/has');
 const { types } = require('sharetribe-flex-sdk');
 const { Money } = types;
 
-const { convertMoneyToNumber, unitDivisor, convertUnitToSubUnit } = require('./currency');
+const { getAmountAsDecimalJS, convertDecimalJSToNumber } = require('./currency');
 const { nightsBetween, daysBetween } = require('./dates');
 const LINE_ITEM_NIGHT = 'line-item/night';
 const LINE_ITEM_DAY = 'line-item/day';
@@ -20,12 +20,12 @@ const LINE_ITEM_DAY = 'line-item/day';
  * @returns {Money} lineTotal
  */
 exports.calculateTotalPriceFromQuantity = (unitPrice, unitCount) => {
-  const numericPrice = convertMoneyToNumber(unitPrice);
-  const numericTotalPrice = new Decimal(numericPrice).times(unitCount).toNumber();
-  return new Money(
-    convertUnitToSubUnit(numericTotalPrice, unitDivisor(unitPrice.currency)),
-    unitPrice.currency
-  );
+  const amountFromUnitPrice = getAmountAsDecimalJS(unitPrice);
+  const totalPrice = amountFromUnitPrice.times(unitCount);
+  // Get total price as Number (and validate that the conversion is safe)
+  const numericTotalPrice = convertDecimalJSToNumber(totalPrice);
+
+  return new Money(numericTotalPrice, unitPrice.currency);
 };
 
 /**
@@ -38,15 +38,15 @@ exports.calculateTotalPriceFromQuantity = (unitPrice, unitCount) => {
  * @returns {Money} lineTotal
  */
 exports.calculateTotalPriceFromPercentage = (unitPrice, percentage) => {
-  const numericPrice = convertMoneyToNumber(unitPrice);
-  const numericTotalPrice = new Decimal(numericPrice)
+  const amountFromUnitPrice = getAmountAsDecimalJS(unitPrice);
+  const totalPrice = amountFromUnitPrice
     .times(percentage)
     .dividedBy(100)
-    .toNumber();
-  return new Money(
-    convertUnitToSubUnit(numericTotalPrice, unitDivisor(unitPrice.currency)),
-    unitPrice.currency
-  );
+    .round();
+  // Get total price as Number (and validate that the conversion is safe)
+  const numericTotalPrice = convertDecimalJSToNumber(totalPrice);
+
+  return new Money(numericTotalPrice, unitPrice.currency);
 };
 
 /**
@@ -63,15 +63,13 @@ exports.calculateTotalPriceFromSeats = (unitPrice, unitCount, seats) => {
   if (seats < 0) {
     throw new Error(`Value of seats can't be negative`);
   }
-  const numericPrice = convertMoneyToNumber(unitPrice);
-  const numericTotalPrice = new Decimal(numericPrice)
-    .times(unitCount)
-    .times(seats)
-    .toNumber();
-  return new Money(
-    convertUnitToSubUnit(numericTotalPrice, unitDivisor(unitPrice.currency)),
-    unitPrice.currency
-  );
+
+  const amountFromUnitPrice = getAmountAsDecimalJS(unitPrice);
+  const totalPrice = amountFromUnitPrice.times(unitCount).times(seats);
+  // Get total price as Number (and validate that the conversion is safe)
+  const numericTotalPrice = convertDecimalJSToNumber(totalPrice);
+
+  return new Money(numericTotalPrice, unitPrice.currency);
 };
 
 /**
@@ -126,18 +124,16 @@ exports.calculateLineTotal = lineItem => {
  * @retuns {Money} total sum
  */
 exports.calculateTotalFromLineItems = lineItems => {
-  const numericTotalPrice = lineItems.reduce((sum, lineItem) => {
+  const totalPrice = lineItems.reduce((sum, lineItem) => {
     const lineTotal = this.calculateLineTotal(lineItem);
-    const numericPrice = convertMoneyToNumber(lineTotal);
-    return new Decimal(numericPrice).add(sum);
+    return getAmountAsDecimalJS(lineTotal).add(sum);
   }, 0);
 
+  // Get total price as Number (and validate that the conversion is safe)
+  const numericTotalPrice = convertDecimalJSToNumber(totalPrice);
   const unitPrice = lineItems[0].unitPrice;
 
-  return new Money(
-    convertUnitToSubUnit(numericTotalPrice.toNumber(), unitDivisor(unitPrice.currency)),
-    unitPrice.currency
-  );
+  return new Money(numericTotalPrice, unitPrice.currency);
 };
 
 /**
